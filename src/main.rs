@@ -24,6 +24,8 @@ fn main() {
 
     for image in &app.images {
         print!("Re-converting {} ", image.display());
+        io::stdout().flush().unwrap();
+
         match re_convert_image(image, app.target_size) {
             Ok(ConversionOutcome::Converted {
                 original_size,
