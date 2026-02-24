@@ -2,7 +2,7 @@ use clap::Parser;
 use image::{DynamicImage, ImageError, ImageReader};
 use std::{
     fs::File,
-    io::{self, BufReader, Write},
+    io::{self, BufReader, Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -43,6 +43,9 @@ fn main() {
             }
         }
     }
+
+    // Wait for user input before exiting, so they can see the results
+    io::stdin().read_exact(&mut [0]).unwrap();
 }
 
 #[derive(Debug, thiserror::Error)]
