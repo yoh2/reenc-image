@@ -13,6 +13,10 @@ struct App {
     #[clap(short = 's', long, default_value = "15728640")]
     target_size: usize,
 
+    /// Overwrite existing files with the same name as the converted ones (if they exist)
+    #[clap(short = 'f', long)]
+    force: bool,
+
     /// The input image files to be re-converted
     #[clap(required = true)]
     images: Vec<PathBuf>,
@@ -26,7 +30,7 @@ fn main() {
         print!("Re-converting {} ", image.display());
         io::stdout().flush().unwrap();
 
-        match re_convert_image(image, app.target_size) {
+        match re_convert_image(image, app.target_size, app.force) {
             Ok(ConversionOutcome::Converted {
                 original_size,
                 new_size,
@@ -74,7 +78,11 @@ enum ConversionOutcome {
     },
 }
 
-fn re_convert_image(image_path: &Path, target_size: usize) -> Result<ConversionOutcome, Error> {
+fn re_convert_image(
+    image_path: &Path,
+    target_size: usize,
+    force_overwrite: bool,
+) -> Result<ConversionOutcome, Error> {
     let file = File::open(image_path)?;
     let original_size = file.metadata()?.len();
 
@@ -100,7 +108,12 @@ fn re_convert_image(image_path: &Path, target_size: usize) -> Result<ConversionO
         new_file_name.push(extension);
         let new_path = image_path.with_file_name(new_file_name);
 
-        File::create_new(&new_path)?.write_all(&converted_data)?;
+        let mut file = if force_overwrite {
+            File::create(&new_path)
+        } else {
+            File::create_new(&new_path)
+        }?;
+        file.write_all(&converted_data)?;
 
         return Ok(ConversionOutcome::Converted {
             original_size,
