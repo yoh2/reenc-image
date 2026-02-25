@@ -56,7 +56,7 @@ fn main() {
 
     if app.wait {
         // Wait for user input before exiting, so they can see the results
-        io::stdin().read_exact(&mut [0]).unwrap();
+        let _ = io::stdin().read_exact(&mut [0]);
     }
 }
 
