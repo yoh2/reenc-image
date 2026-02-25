@@ -104,7 +104,7 @@ fn re_convert_image(
             .file_stem()
             .expect("image_path must be a file")
             .to_os_string();
-        new_file_name.push("-reconv");
+        new_file_name.push("-reenc");
         new_file_name.push(extension);
         let new_path = image_path.with_file_name(new_file_name);
 
