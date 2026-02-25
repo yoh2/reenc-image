@@ -17,6 +17,10 @@ struct App {
     #[clap(short = 'f', long)]
     force: bool,
 
+    /// Wait for user input before exiting (useful when launched from a file manager)
+    #[clap(short = 'w', long, default_value_t = cfg!(windows), action = clap::ArgAction::Set)]
+    wait: bool,
+
     /// The input image files to be re-converted
     #[clap(required = true)]
     images: Vec<PathBuf>,
@@ -50,8 +54,10 @@ fn main() {
         }
     }
 
-    // Wait for user input before exiting, so they can see the results
-    io::stdin().read_exact(&mut [0]).unwrap();
+    if app.wait {
+        // Wait for user input before exiting, so they can see the results
+        io::stdin().read_exact(&mut [0]).unwrap();
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
