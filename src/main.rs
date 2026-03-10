@@ -6,14 +6,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Convert images to shrink them, if possible, by re-saving them with different encoders and settings.
+/// Encode images to shrink them, if possible, by re-saving them with different encoders and settings.
 #[derive(Debug, Parser)]
 struct App {
     /// The target size in bytes
     #[clap(short = 's', long, default_value = "15728640")]
     target_size: usize,
 
-    /// Overwrite existing files with the same name as the converted ones (if they exist)
+    /// Overwrite existing files with the same name as the encoded ones (if they exist)
     #[clap(short = 'f', long)]
     force: bool,
 
@@ -21,7 +21,7 @@ struct App {
     #[clap(short = 'w', long, default_value_t = cfg!(windows), action = clap::ArgAction::Set)]
     wait: bool,
 
-    /// The input image files to be re-converted
+    /// The input image files to be re-encoded
     #[clap(required = true)]
     images: Vec<PathBuf>,
 }
@@ -31,11 +31,11 @@ fn main() {
     println!("Target size: {} bytes", app.target_size);
 
     for image in &app.images {
-        print!("Re-converting {} ", image.display());
+        print!("Re-encoding {} ", image.display());
         io::stdout().flush().unwrap();
 
-        match re_convert_image(image, app.target_size, app.force) {
-            Ok(ConversionOutcome::Converted {
+        match re_encode_image(image, app.target_size, app.force) {
+            Ok(EncodeOutcome::Encoded {
                 original_size,
                 new_size,
                 new_path,
@@ -45,7 +45,7 @@ fn main() {
                     new_path.display()
                 );
             }
-            Ok(ConversionOutcome::Skipped { original_size }) => {
+            Ok(EncodeOutcome::Skipped { original_size }) => {
                 println!(" ({original_size} bytes) -> (skipped, already smaller than target)");
             }
             Err(e) => {
@@ -68,13 +68,13 @@ enum Error {
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Image size exceeds target size after conversion")]
+    #[error("Image size exceeds target size after encoded")]
     ImageSizeExceedsTarget,
 }
 
 #[derive(Debug)]
-enum ConversionOutcome {
-    Converted {
+enum EncodeOutcome {
+    Encoded {
         original_size: u64,
         new_size: u64,
         new_path: PathBuf,
@@ -84,25 +84,25 @@ enum ConversionOutcome {
     },
 }
 
-fn re_convert_image(
+fn re_encode_image(
     image_path: &Path,
     target_size: usize,
     force_overwrite: bool,
-) -> Result<ConversionOutcome, Error> {
+) -> Result<EncodeOutcome, Error> {
     let file = File::open(image_path)?;
     let original_size = file.metadata()?.len();
 
     if original_size < target_size as u64 {
-        return Ok(ConversionOutcome::Skipped { original_size });
+        return Ok(EncodeOutcome::Skipped { original_size });
     }
 
     let image = ImageReader::new(BufReader::new(file))
         .with_guessed_format()?
         .decode()?;
 
-    for strategy in CONVERSION_STRATEGIES {
-        let (converted_data, extension) = strategy(&image)?;
-        if converted_data.len() >= target_size {
+    for strategy in ENCODE_STRATEGIES {
+        let (encoded_data, extension) = strategy(&image)?;
+        if encoded_data.len() >= target_size {
             continue;
         }
 
@@ -119,11 +119,11 @@ fn re_convert_image(
         } else {
             File::create_new(&new_path)
         }?;
-        file.write_all(&converted_data)?;
+        file.write_all(&encoded_data)?;
 
-        return Ok(ConversionOutcome::Converted {
+        return Ok(EncodeOutcome::Encoded {
             original_size,
-            new_size: converted_data.len() as u64,
+            new_size: encoded_data.len() as u64,
             new_path,
         });
     }
@@ -131,7 +131,7 @@ fn re_convert_image(
     Err(Error::ImageSizeExceedsTarget)
 }
 
-macro_rules! def_conversion_fn {
+macro_rules! def_encode_fn {
     ($fn_name:ident, $create_encoder:expr, $extension:expr) => {
         fn $fn_name(image: &DynamicImage) -> Result<(Vec<u8>, &'static str), Error> {
             let mut buf = Vec::new();
@@ -142,8 +142,8 @@ macro_rules! def_conversion_fn {
     };
 }
 
-def_conversion_fn!(
-    convert_to_png,
+def_encode_fn!(
+    encode_to_png,
     |w| {
         use image::codecs::png::{CompressionType, FilterType, PngEncoder};
         PngEncoder::new_with_quality(w, CompressionType::Best, FilterType::Adaptive)
@@ -151,8 +151,8 @@ def_conversion_fn!(
     ".png"
 );
 
-def_conversion_fn!(
-    convert_to_jpeg_100,
+def_encode_fn!(
+    encode_to_jpeg_100,
     |w| {
         use image::codecs::jpeg::JpegEncoder;
         JpegEncoder::new_with_quality(w, 100)
@@ -160,8 +160,8 @@ def_conversion_fn!(
     ".jpg"
 );
 
-def_conversion_fn!(
-    convert_to_jpeg_90,
+def_encode_fn!(
+    encode_to_jpeg_90,
     |w| {
         use image::codecs::jpeg::JpegEncoder;
         JpegEncoder::new_with_quality(w, 90)
@@ -169,7 +169,6 @@ def_conversion_fn!(
     ".jpg"
 );
 
-type ConversionFn = fn(&DynamicImage) -> Result<(Vec<u8>, &'static str), Error>;
+type EncodeFn = fn(&DynamicImage) -> Result<(Vec<u8>, &'static str), Error>;
 
-const CONVERSION_STRATEGIES: &[ConversionFn] =
-    &[convert_to_png, convert_to_jpeg_100, convert_to_jpeg_90];
+const ENCODE_STRATEGIES: &[EncodeFn] = &[encode_to_png, encode_to_jpeg_100, encode_to_jpeg_90];
